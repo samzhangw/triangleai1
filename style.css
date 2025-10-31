@@ -70,24 +70,6 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* 【新】 柔和背景裝飾球 */
-body::before,
-body::after {
-    content: "";
-    position: fixed;
-    inset: auto auto 10% -80px;
-    width: 240px;
-    height: 240px;
-    background: radial-gradient(closest-side, rgba(52,152,219,0.18), rgba(52,152,219,0));
-    filter: blur(0.5px);
-    pointer-events: none;
-    z-index: 0;
-}
-body::after {
-    inset: 5% -80px auto auto;
-    background: radial-gradient(closest-side, rgba(231,76,60,0.15), rgba(231,76,60,0));
-}
-
 /* 【修改】 手機版 h1 字體縮小 */
 h1 {
     font-size: 2.5rem; /* 縮小字體 */
@@ -104,15 +86,6 @@ h1 {
     animation: animatedGradient 6s ease infinite;
 }
 
-/* 【新】 副標題 */
-.subtitle {
-    margin: -8px 0 16px 0;
-    color: #6b7b8c;
-    font-weight: 600;
-    text-align: center;
-    letter-spacing: 0.2px;
-}
-
 /* 【修改】 手機版 game-container 邊距縮小 */
 #game-container {
     display: flex;
@@ -127,8 +100,6 @@ h1 {
     box-shadow: var(--shadow-lg);
     border: 1px solid var(--color-border);
     animation: fadeIn 0.6s ease-out;
-    position: relative;
-    z-index: 1;
 }
 
 /* --- 計分板 (相同) --- */
@@ -204,16 +175,8 @@ canvas:hover {
     transition: all 0.2s ease-in-out;
     color: white;
     width: 100%;
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(0,0,0,0.06));
 }
-
-/* 【新】 按鈕可用性與可及性 */
-.btn:focus-visible {
-    outline: 3px solid rgba(52,152,219,0.35);
-    outline-offset: 2px;
-}
-.btn.primary:focus-visible { outline-color: rgba(52,152,219,0.45); }
-.btn.success:focus-visible { outline-color: rgba(46,204,113,0.45); }
-.btn.danger:focus-visible  { outline-color: rgba(231,76,60,0.45); }
 
 .btn:hover {
     transform: translateY(-2px);
@@ -230,6 +193,10 @@ canvas:hover {
 /* 【新】 AI 按鈕樣式 */
 .btn.ai-off { background-color: var(--btn-primary); }
 .btn.ai-on  { background-color: var(--btn-ai-on); }
+.btn:focus-visible {
+    outline: 3px solid rgba(52, 152, 219, 0.35);
+    outline-offset: 2px;
+}
 
 
 /* --- 按鈕控制區 (相同) --- */
@@ -260,18 +227,40 @@ canvas:hover {
     width: 100%;
 }
 
-/* 【新】 頁尾 */
-#page-footer {
-    margin-top: 18px;
-    color: #95a5a6;
-    font-size: 0.9rem;
-    text-align: center;
-    user-select: none;
+#game-controls .control-label {
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1;
+}
+
+#game-controls .control-select {
+    width: 100%;
+    padding: 12px 15px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-white);
+    box-shadow: var(--shadow-sm);
+    font-family: var(--font-main);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+@media (min-width: 768px) {
+    #game-controls .control-select {
+        width: auto;
+    }
+}
+
+/* 控制群組容器 */
+#game-controls .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 /* --- 遊戲結束 Modal (相同) --- */
-#modal-overlay,
-#help-overlay {
+#modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -283,10 +272,10 @@ canvas:hover {
     justify-content: center;
     z-index: 100;
     animation: modalFadeIn 0.3s ease;
+    backdrop-filter: blur(3px);
 }
 
-#game-over-message,
-#help-modal {
+#game-over-message {
     background: var(--color-white);
     padding: 40px 50px;
     border-radius: 20px;
@@ -307,21 +296,6 @@ canvas:hover {
     width: 100%; 
 }
 
-/* 【新】 說明彈窗樣式 */
-#help-modal h2 {
-    margin-top: 0;
-    margin-bottom: 14px;
-    font-size: 1.6rem;
-    color: var(--color-text);
-}
-.help-list {
-    text-align: left;
-    padding-left: 20px;
-    margin: 0 0 18px 0;
-    color: #566573;
-    line-height: 1.6;
-}
-
 .hidden {
     display: none !important;
 }
@@ -337,7 +311,6 @@ canvas:hover {
     h1 {
         font-size: 2.8rem;
     }
-    .subtitle { font-size: 1.05rem; }
     
     /* 恢復桌機版 game-container 邊距 */
     #game-container {
@@ -353,9 +326,15 @@ canvas:hover {
     #game-controls {
         flex-direction: row;
         justify-content: center;
+        align-items: center;
+        gap: 14px;
     }
     
     .btn {
         width: auto; 
+    }
+    #game-controls .control-group {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }

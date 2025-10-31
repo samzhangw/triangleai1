@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const player1ScoreBox = document.getElementById('player1-score');
     const player2ScoreBox = document.getElementById('player2-score');
     const gameOverMessage = document.getElementById('game-over-message'); 
-    const winnerText = document.getElementById('winner-text');
+    const winnerText = document.getElementById('winnerText');
     const confirmLineButton = document.getElementById('confirm-line-button');
     const cancelLineButton = document.getElementById('cancel-line-button');
     const actionBar = document.getElementById('action-bar');
@@ -16,16 +16,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetButtonModal = document.getElementById('reset-button-modal');
     // 【新】 AI 切換按鈕
     const toggleAIButton = document.getElementById('toggle-ai-button');
-    // 【新】 說明彈窗元素
-    const helpButton = document.getElementById('help-button');
-    const helpOverlay = document.getElementById('help-overlay');
-    const helpCloseButton = document.getElementById('help-close-button');
+    const boardSizeSelect = document.getElementById('board-size-select');
 
     // 【新】 偵測是否為手機
     const isMobile = window.innerWidth < 768;
     
     // 【修改】 遊戲設定 (根據是否為手機動態調整)
-    const ROW_LENGTHS = [4, 5, 6, 7, 6, 5, 4]; // 菱形網格的定義 (相同)
+    let ROW_LENGTHS = []; // 改為動態
     const DOT_SPACING_X = isMobile ? 60 : 100; // 手機版間距縮小
     const DOT_SPACING_Y = DOT_SPACING_X * Math.sqrt(3) / 2;
     const PADDING = isMobile ? 30 : 50; // 手機版邊距縮小
@@ -35,6 +32,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const CLICK_TOLERANCE_DOT = isMobile ? 20 : 15; // 手機版點擊範圍加大
     const ANGLE_TOLERANCE = 1.5; // 角度容許誤差 (相同)
 
+    // 【新】 依棋盤大小產生 ROW_LENGTHS
+    function computeRowLengths(size) {
+        switch (size) {
+            case 'small':
+                return [3, 4, 5, 4, 3];
+            case 'large':
+                return [5, 6, 7, 8, 9, 8, 7, 6, 5];
+            case 'medium':
+            default:
+                return [4, 5, 6, 7, 6, 5, 4];
+        }
+    }
 
     // 玩家顏色 (與 CSS 相同)
     const PLAYER_COLORS = {
@@ -70,6 +79,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初始化遊戲
     function initGame() {
+        // 0. 依選單值決定 ROW_LENGTHS
+        const sizeValue = (boardSizeSelect && boardSizeSelect.value) ? boardSizeSelect.value : 'medium';
+        ROW_LENGTHS = computeRowLengths(sizeValue);
+
         // 1. 計算畫布大小 (相同邏輯，但使用動態變數)
         const gridWidth = (Math.max(...ROW_LENGTHS) - 1) * DOT_SPACING_X;
         const gridHeight = (ROW_LENGTHS.length - 1) * DOT_SPACING_Y;
@@ -87,7 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedDot2 = null;
         actionBar.classList.remove('visible'); 
         modalOverlay.classList.add('hidden'); 
-        helpOverlay.classList.add('hidden');
 
         // 3. 產生所有點的座標 (r, c) (相同邏輯)
         dots = [];
@@ -774,24 +786,10 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelLineButton.addEventListener('click', cancelLine);
     // 【新】 綁定 AI 切換按鈕
     toggleAIButton.addEventListener('click', toggleAI);
-
-    // 【新】 說明彈窗事件
-    helpButton.addEventListener('click', () => {
-        helpOverlay.classList.remove('hidden');
-    });
-    helpCloseButton.addEventListener('click', () => {
-        helpOverlay.classList.add('hidden');
-    });
-    helpOverlay.addEventListener('click', (e) => {
-        if (e.target === helpOverlay) {
-            helpOverlay.classList.add('hidden');
-        }
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !helpOverlay.classList.contains('hidden')) {
-            helpOverlay.classList.add('hidden');
-        }
-    });
+    // 【新】 監聽棋盤大小變更
+    if (boardSizeSelect) {
+        boardSizeSelect.addEventListener('change', initGame);
+    }
 
     // 啟動遊戲 (相同)
     initGame();

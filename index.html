@@ -14,7 +14,7 @@
 <body>
 
     <h1>點點圍三角加入電腦對戰</h1>
-    <p class="subtitle">連線成三角，搶分對決，支援與電腦對戰！</p>
+    <p class="subtitle">連點成線、圍出三角。支援與朋友或電腦對戰！</p>
 
     <div id="game-container">
         <div id="status-bar">
@@ -34,9 +34,20 @@
         </div>
 
         <div id="game-controls">
-            <button id="toggle-ai-button" class="btn">V.S. 電腦 (已關閉)</button>
-            <button id="reset-button" class="btn success">重新開始</button>
-            <button id="help-button" class="btn">遊戲說明</button>
+            <div class="control-group">
+                <button id="toggle-ai-button" class="btn">V.S. 電腦 (已關閉)</button>
+            </div>
+            <div class="control-group">
+                <label for="board-size-select" class="control-label">棋盤大小</label>
+                <select id="board-size-select" class="control-select">
+                    <option value="small">小</option>
+                    <option value="medium" selected>中</option>
+                    <option value="large">大</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <button id="reset-button" class="btn success">重新開始</button>
+            </div>
         </div>
     </div>
 
@@ -44,23 +55,6 @@
         <div id="game-over-message">
             <span id="winner-text"></span>
             <button id="reset-button-modal" class="btn success">重新開始</button>
-        </div>
-    </div>
-
-    <footer id="page-footer">© 2025 Triangle AI • 祝遊玩愉快</footer>
-
-    <div id="help-overlay" class="hidden">
-        <div id="help-modal">
-            <h2>遊戲說明</h2>
-            <ol class="help-list">
-                <li>輪流連線兩點，線段須為 0°、60°、120° 或 180°。</li>
-                <li>一次可畫多段共線，系統會自動切成短線。</li>
-                <li>當三條邊完成一個三角形時，該三角形歸畫最後一條邊的玩家得分。</li>
-                <li>同一條線如被雙方共用，畫面會以雙色並排顯示。</li>
-                <li>開啟「V.S. 電腦」後，玩家為先手，AI 將自動出招。</li>
-                <li>點擊空白處可取消選取；點「取消選取」可重來本次操作。</li>
-            </ol>
-            <button id="help-close-button" class="btn primary">我了解了</button>
         </div>
     </div>
 

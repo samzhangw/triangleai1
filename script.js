@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 【新】 AI 切換按鈕
     const toggleAIButton = document.getElementById('toggle-ai-button');
     const boardSizeSelect = document.getElementById('board-size-select');
+    const maxLineLengthSelect = document.getElementById('max-line-length-select');
 
     // 【新】 偵測是否為手機
     const isMobile = window.innerWidth < 768;
@@ -409,6 +410,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // 2.5. 【新】 檢查連線格數限制
+        const maxLineLength = maxLineLengthSelect ? parseInt(maxLineLengthSelect.value) : 0;
+        if (maxLineLength > 0 && segmentIds.length > maxLineLength) {
+            alert(`連線格數超過限制！最多只能連 ${maxLineLength} 格。`);
+            cancelLine();
+            return;
+        }
+
         // 3. 【修改】 檢查線段是否存在 (邏輯相同)
         let allSegmentsExist = true;
         let newSegmentDrawn = false; // 用於追蹤是否畫了 "新" 線
@@ -624,33 +633,76 @@ document.addEventListener('DOMContentLoaded', () => {
         // 安全檢查
         if (currentPlayer !== 2 || !isAIBotActive) return;
 
-        // AI 只會畫 "單一線段"
-        const bestLineId = findBestMove();
+        // 【修改】 AI 會嘗試連線 3 格
+        const bestMove = findBestAIMove();
 
-        if (bestLineId) {
-            // 找到線段並 "畫" 上去
-            const line = lines[bestLineId];
-            let newSegmentDrawn = false;
+        if (bestMove && bestMove.dot1 && bestMove.dot2) {
+            // 使用類似 confirmLine 的邏輯來處理連線
+            const dotA = bestMove.dot1;
+            const dotB = bestMove.dot2;
             
-            if (line && !line.drawn) { 
-                line.drawn = true;
-                line.player = currentPlayer; // currentPlayer 肯定是 2
-                newSegmentDrawn = true;
-            } else if (line && line.player !== 0 && line.player !== currentPlayer) {
-                line.sharedBy = currentPlayer;
-                // 注意：AI "借用" 線條並不算一次有效移動，它必須畫新線
-                // findBestMove() 應只回傳 !drawn 的線，所以這裡理論上不會執行
+            // 1. 角度檢查
+            const dy = dotB.y - dotA.y;
+            const dx = dotB.x - dotA.x;
+            if (dx !== 0 || dy !== 0) {
+                const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                const absAngle = Math.abs(angle);
+                const isValidAngle = isClose(absAngle, 0) || 
+                                     isClose(absAngle, 60) || 
+                                     isClose(absAngle, 120) || 
+                                     isClose(absAngle, 180);
+                if (!isValidAngle) {
+                    switchPlayer(); // 無效角度，換回玩家
+                    return;
+                }
             }
 
-            if (!newSegmentDrawn) {
-                // 找不到新線 (理論上不該發生，除非 findBestMove 出錯)
-                switchPlayer(); // 換回玩家
+            // 2. 拆解長線為短線
+            const allDotsOnLine = findIntermediateDots(dotA, dotB);
+            const segmentIds = [];
+            for (let i = 0; i < allDotsOnLine.length - 1; i++) {
+                segmentIds.push(getLineId(allDotsOnLine[i], allDotsOnLine[i+1]));
+            }
+            if (segmentIds.length === 0) {
+                switchPlayer();
                 return;
             }
 
-            // 檢查得分
+            // 3. 檢查所有線段是否存在
+            let allSegmentsExist = true;
+            let newSegmentDrawn = false;
+
+            for (const id of segmentIds) {
+                if (!lines[id]) {
+                    allSegmentsExist = false;
+                    break;
+                }
+            }
+            if (!allSegmentsExist) {
+                switchPlayer();
+                return;
+            }
+
+            // 4. 遍歷所有線段，畫新線或標記共享線
+            for (const id of segmentIds) {
+                if (lines[id]) {
+                    if (!lines[id].drawn) { 
+                        lines[id].drawn = true;
+                        lines[id].player = currentPlayer;
+                        newSegmentDrawn = true;
+                    } else if (lines[id].player !== 0 && lines[id].player !== currentPlayer) {
+                        lines[id].sharedBy = currentPlayer;
+                    }
+                }
+            }
+
+            if (!newSegmentDrawn) {
+                switchPlayer();
+                return;
+            }
+
+            // 5. 檢查得分
             let totalFilledThisGame = 0;
-            let scoredThisTurn = false;
             triangles.forEach(tri => {
                 if (!tri.filled) {
                     const isComplete = tri.lineKeys.every(key => lines[key] && lines[key].drawn);
@@ -658,7 +710,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         tri.filled = true;
                         tri.player = currentPlayer;
                         scores[currentPlayer]++;
-                        scoredThisTurn = true; // AI 得分了！
                         
                         player2ScoreBox.classList.add('score-pulse');
                         setTimeout(() => {
@@ -677,8 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // 【新 AI 規則】 (新規則：每次都換人)
-            // 無論 AI 是否得分，都切換回玩家
+            // 切換回玩家
             switchPlayer();
 
         } else {
@@ -687,87 +737,213 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // AI "大腦": 尋找最佳移動
-    function findBestMove() {
-        // 策略 1: 尋找能 "得分" 的線
-        const scoringMove = findScoringMove();
+    // AI "大腦": 尋找最佳移動（3格連線）
+    function findBestAIMove() {
+        // 策略 1: 尋找能 "得分" 的3格連線
+        const scoringMove = findScoringMove3Grids();
         if (scoringMove) {
             return scoringMove;
         }
 
-        // 策略 2: 尋找 "安全" 的線 (不會讓對手得分)
-        const safeMoves = findSafeMoves();
+        // 策略 2: 尋找 "安全" 的3格連線 (不會讓對手得分)
+        const safeMoves = findSafeMoves3Grids();
         if (safeMoves.length > 0) {
-            // 從安全線中隨機選一條
+            // 從安全連線中隨機選一個
             return safeMoves[Math.floor(Math.random() * safeMoves.length)];
         }
 
-        // 策略 3: 沒安全線了，隨便選一條 (只好送分)
-        const allAvailableMoves = Object.values(lines).filter(l => !l.drawn).map(l => l.id);
-        if (allAvailableMoves.length > 0) {
-            return allAvailableMoves[Math.floor(Math.random() * allAvailableMoves.length)];
+        // 策略 3: 沒安全連線了，隨便找一個3格連線
+        const allMoves = findAll3GridMoves();
+        if (allMoves.length > 0) {
+            return allMoves[Math.floor(Math.random() * allMoves.length)];
+        }
+        
+        // 策略 4: 如果找不到3格連線，嘗試找較短的連線（2格或1格）
+        const fallbackMove = findFallbackMove();
+        if (fallbackMove) {
+            return fallbackMove;
         }
         
         return null; // 沒線可走了
     }
 
-    // 策略 1: 檢查是否有畫一條線就能得分的
-    function findScoringMove() {
-        for (const tri of triangles) {
-            if (tri.filled) continue;
-
-            let undrawnLineKey = null;
-            let drawnCount = 0;
-            for (const key of tri.lineKeys) {
-                if (lines[key] && lines[key].drawn) {
-                    drawnCount++;
-                } else {
-                    undrawnLineKey = key;
+    // 找到所有可能的3格連線（中間有2個點）
+    function findAll3GridMoves() {
+        const moves = [];
+        const allDots = dots.flat();
+        
+        for (let i = 0; i < allDots.length; i++) {
+            for (let j = i + 1; j < allDots.length; j++) {
+                const dotA = allDots[i];
+                const dotB = allDots[j];
+                
+                // 找到中間所有點
+                const allDotsOnLine = findIntermediateDots(dotA, dotB);
+                
+                // 檢查是否剛好是3格（4個點，中間2個點）
+                if (allDotsOnLine.length === 4) {
+                    // 檢查角度
+                    const dy = dotB.y - dotA.y;
+                    const dx = dotB.x - dotA.x;
+                    if (dx !== 0 || dy !== 0) {
+                        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                        const absAngle = Math.abs(angle);
+                        const isValidAngle = isClose(absAngle, 0) || 
+                                             isClose(absAngle, 60) || 
+                                             isClose(absAngle, 120) || 
+                                             isClose(absAngle, 180);
+                        if (!isValidAngle) continue;
+                    }
+                    
+                    // 檢查所有線段是否存在且至少有一條未畫
+                    const segmentIds = [];
+                    let hasUndrawnSegment = false;
+                    for (let k = 0; k < allDotsOnLine.length - 1; k++) {
+                        const id = getLineId(allDotsOnLine[k], allDotsOnLine[k+1]);
+                        if (!lines[id]) {
+                            segmentIds.length = 0;
+                            break;
+                        }
+                        segmentIds.push(id);
+                        if (!lines[id].drawn) {
+                            hasUndrawnSegment = true;
+                        }
+                    }
+                    
+                    if (segmentIds.length === 3 && hasUndrawnSegment) {
+                        moves.push({ dot1: dotA, dot2: dotB, segmentIds: segmentIds });
+                    }
                 }
             }
+        }
+        
+        return moves;
+    }
 
-            // 如果剛好 2 條邊被畫了，AI 可以畫第 3 條
-            if (drawnCount === 2 && undrawnLineKey) {
-                return undrawnLineKey; 
+    // 策略 1: 檢查是否有畫3格連線就能得分的
+    function findScoringMove3Grids() {
+        const all3GridMoves = findAll3GridMoves();
+        
+        for (const move of all3GridMoves) {
+            // 檢查這個3格連線是否會完成任何三角形
+            for (const tri of triangles) {
+                if (tri.filled) continue;
+                
+                // 計算如果畫了這3格連線，三角形會有多少條邊被畫
+                let drawnCount = 0;
+                for (const key of tri.lineKeys) {
+                    if (move.segmentIds.includes(key)) {
+                        // 這個線段會被畫
+                        drawnCount++;
+                    } else if (lines[key] && lines[key].drawn) {
+                        // 這個線段已經被畫了
+                        drawnCount++;
+                    }
+                }
+                
+                // 如果會完成三角形，優先選擇
+                if (drawnCount === 3) {
+                    return move;
+                }
             }
         }
+        
         return null;
     }
 
-    // 策略 2: 檢查哪些線 "不會" 幫對手製造得分機會
-    function findSafeMoves() {
-        const availableLineIds = Object.values(lines).filter(l => !l.drawn).map(l => l.id);
-        const safeMoveIds = [];
-
-        for (const lineId of availableLineIds) {
+    // 策略 2: 檢查哪些3格連線 "不會" 幫對手製造得分機會
+    function findSafeMoves3Grids() {
+        const all3GridMoves = findAll3GridMoves();
+        const safeMoves = [];
+        
+        for (const move of all3GridMoves) {
             let isSafe = true;
             
-            // 檢查這條線屬於的所有三角形
+            // 檢查這個連線是否會讓對手有得分機會
             for (const tri of triangles) {
-                if (tri.filled || !tri.lineKeys.includes(lineId)) {
-                    continue; // 三角形已滿或與此線無關
-                }
-
-                // "假設" 畫了這條線，三角形會有幾條邊？
+                if (tri.filled) continue;
+                
+                // 假設畫了這3格連線，三角形會有幾條邊？
                 let hypotheticalDrawnCount = 0;
                 for (const key of tri.lineKeys) {
-                    if ((lines[key] && lines[key].drawn) || key === lineId) {
+                    if (move.segmentIds.includes(key)) {
+                        hypotheticalDrawnCount++;
+                    } else if (lines[key] && lines[key].drawn) {
                         hypotheticalDrawnCount++;
                     }
                 }
-
-                // 如果畫了這條線會導致三角形有 2 條邊 (幫對手搭橋)
+                
+                // 如果畫了這3格連線會導致三角形有 2 條邊 (幫對手搭橋)
                 if (hypotheticalDrawnCount === 2) {
                     isSafe = false;
-                    break; // 這不是安全線，換下一條線
+                    break;
                 }
             }
-
+            
             if (isSafe) {
-                safeMoveIds.push(lineId);
+                safeMoves.push(move);
             }
         }
-        return safeMoveIds;
+        
+        return safeMoves;
+    }
+
+    // 備用策略: 如果找不到3格連線，找2格或1格連線
+    function findFallbackMove() {
+        const allDots = dots.flat();
+        
+        // 先嘗試找2格連線
+        for (let i = 0; i < allDots.length; i++) {
+            for (let j = i + 1; j < allDots.length; j++) {
+                const dotA = allDots[i];
+                const dotB = allDots[j];
+                const allDotsOnLine = findIntermediateDots(dotA, dotB);
+                
+                if (allDotsOnLine.length === 3) { // 2格（3個點）
+                    const dy = dotB.y - dotA.y;
+                    const dx = dotB.x - dotA.x;
+                    if (dx !== 0 || dy !== 0) {
+                        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                        const absAngle = Math.abs(angle);
+                        const isValidAngle = isClose(absAngle, 0) || 
+                                             isClose(absAngle, 60) || 
+                                             isClose(absAngle, 120) || 
+                                             isClose(absAngle, 180);
+                        if (!isValidAngle) continue;
+                    }
+                    
+                    const segmentIds = [];
+                    let hasUndrawnSegment = false;
+                    for (let k = 0; k < allDotsOnLine.length - 1; k++) {
+                        const id = getLineId(allDotsOnLine[k], allDotsOnLine[k+1]);
+                        if (!lines[id]) {
+                            segmentIds.length = 0;
+                            break;
+                        }
+                        segmentIds.push(id);
+                        if (!lines[id].drawn) {
+                            hasUndrawnSegment = true;
+                        }
+                    }
+                    
+                    if (segmentIds.length === 2 && hasUndrawnSegment) {
+                        return { dot1: dotA, dot2: dotB, segmentIds: segmentIds };
+                    }
+                }
+            }
+        }
+        
+        // 最後嘗試找1格連線（單一線段）
+        const availableLineIds = Object.values(lines).filter(l => !l.drawn).map(l => l.id);
+        if (availableLineIds.length > 0) {
+            const lineId = availableLineIds[Math.floor(Math.random() * availableLineIds.length)];
+            const line = lines[lineId];
+            if (line) {
+                return { dot1: line.p1, dot2: line.p2, segmentIds: [lineId] };
+            }
+        }
+        
+        return null;
     }
 
 
@@ -789,6 +965,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // 【新】 監聽棋盤大小變更
     if (boardSizeSelect) {
         boardSizeSelect.addEventListener('change', initGame);
+    }
+    // 【新】 監聽連線格數限制變更（不需要重置遊戲）
+    if (maxLineLengthSelect) {
+        maxLineLengthSelect.addEventListener('change', function() {
+            // 如果當前有選取的點，取消選取
+            if (selectedDot1 || selectedDot2) {
+                cancelLine();
+            }
+        });
     }
 
     // 啟動遊戲 (相同)
